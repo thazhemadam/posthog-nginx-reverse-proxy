@@ -2,11 +2,14 @@ worker_processes auto;
 events { worker_connections 1024; }
 http {
     sendfile on;
+    client_max_body_size 64M; # Support large session recording uploads
+
+    # This resolver is IGNORED by hardcoded proxy_pass, but USED by variables
+    resolver 8.8.8.8 8.8.4.4 valid=30s ipv6=off;
+
     server {
         listen ${PORT};
         server_name ${SERVER_NAME};
-        # DNS resolver
-        resolver 8.8.8.8 8.8.4.4 valid=1s ipv6=off;
         
         # Health check endpoint
         location = /health {
@@ -17,8 +20,9 @@ http {
         
         # Static assets - from us-assets.i.posthog.com
         location /static {
-            proxy_pass https://${POSTHOG_CLOUD_REGION}-assets.i.posthog.com;
-            proxy_set_header Host "${POSTHOG_CLOUD_REGION}-assets.i.posthog.com";
+            set $ph_assets ${POSTHOG_CLOUD_REGION}-assets.i.posthog.com;
+            proxy_pass https://$ph_assets;
+            proxy_set_header Host $ph_assets;
             proxy_ssl_server_name on;
             
             # Remove upstream CORS headers to prevent duplicates
@@ -36,8 +40,9 @@ http {
         
         # Main API endpoints
         location / {
-            proxy_pass https://${POSTHOG_CLOUD_REGION}.i.posthog.com;
-            proxy_set_header Host "${POSTHOG_CLOUD_REGION}.i.posthog.com";
+            set $ph_ingest ${POSTHOG_CLOUD_REGION}.i.posthog.com;
+            proxy_pass https://$ph_ingest;
+            proxy_set_header Host $ph_ingest;
             proxy_ssl_server_name on;
             
             # Remove upstream CORS headers to prevent duplicates
